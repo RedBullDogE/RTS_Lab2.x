@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import concurrent.futures
+import time
 import random
 from math import pi, cos, sin
 
@@ -10,8 +12,6 @@ def generate_signal(n, amp, ph, freq, p, a, b):
         (random.randint(0, amp), random.uniform(0, ph), w_step * (i + 1))
         for i in range(n)
     ]
-    for r in rand_val:
-        print(f'A = {r[0]};  phi = {r[1]}; W = {r[2]}')
 
     time_axis = np.linspace(a, b, p)
     sign_axis = sum([np.array([val[0] * sin(2 * pi * (val[2] * t + val[1])) for t in time_axis])
@@ -39,20 +39,32 @@ def fft(x):
 
     even = fft(x[::2])
     odd = fft(x[1::2])
+
     factor = np.exp(-2j * np.pi * np.arange(n) / n)
 
     return np.concatenate([even + factor[:int(n/2)] * odd,
                            even + factor[int(n/2):] * odd])
 
 
-if __name__ == "__main__":
-    ampl = 10           # Max. amplitude - A
-    phi = 2 * pi        # Max. phase - phi
-    n = 8               # Number of harmonics - n
-    w = 1200            # Limit frequency - Wgr
-    points = 256        # Number of points - N
-    a, b = 0, 0.1       # Generation range
+def pfft(x):
+    n = x.size
 
+    if n <= 1:
+        return x
+
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        even_thread = executor.submit(fft, (x[::2]))
+        odd_thread = executor.submit(fft, (x[1::2]))
+        even = even_thread.result()
+        odd = odd_thread.result()
+
+    factor = np.exp(-2j * np.pi * np.arange(n) / n)
+
+    return np.concatenate([even + factor[:int(n/2)] * odd,
+                           even + factor[int(n/2):] * odd])
+
+
+def main_task():
     t, x = generate_signal(n, ampl, phi, w, points, a, b)
 
     ans1 = fft(x)
@@ -69,4 +81,50 @@ if __name__ == "__main__":
     ax3.plot(2/points * np.abs(ans2))
     ax3.set_title('FFT')
 
-    plt.show()
+    plt.savefig('dft_fft')
+
+
+def additional_task():
+    def time_measuring():
+        start1 = time.time()
+        fft(x)
+        total1 = time.time() - start1
+
+        start2 = time.time()
+        pfft(x)
+        total2 = time.time() - start2
+
+        return total1, total2
+
+    # Array of points
+    points = [2**i for i in range(8, 18)]        
+
+    time_arr_fft, time_arr_pfft = [], []
+
+    for p in points:
+        t, x = generate_signal(n, ampl, phi, w, p, a, b)
+        t1, t2 = time_measuring()
+        time_arr_fft.append(t1)
+        time_arr_pfft.append(t2)
+
+    plt.plot(points, time_arr_fft, label='fft')
+    plt.plot(points, time_arr_pfft, label='pfft')
+
+    plt.xlabel('N')
+    plt.ylabel('time/s')
+    plt.legend()
+
+    plt.savefig('additional_task')
+
+
+if __name__ == "__main__":
+    ampl = 10           # Max. amplitude - A
+    phi = 2 * pi        # Max. phase - phi
+    n = 8               # Number of harmonics - n
+    w = 1200            # Limit frequency - Wgr
+    points = 256        # Number of points - N
+    a, b = 0, 0.1       # Generation range
+
+    # main_task()
+    additional_task()
+
