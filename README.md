@@ -6,4 +6,4 @@ Real-time Systems laboratory works 2.1/2.2
 
 ### Результат:
 
-![](additional.png)
+![](additional_task.png)
